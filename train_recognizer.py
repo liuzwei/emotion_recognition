@@ -16,10 +16,12 @@ from network.io import HDF5DatasetGenerator
 from network.nn.conv import EmotionVGGNet
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.models import load_model
 import tensorflow.keras.backend as K
 import argparse
 import os
+import tensorflow as tf
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -44,6 +46,9 @@ trainGen = HDF5DatasetGenerator(config.TRAIN_HDF5, config.BATCH_SIZE,
 valGen = HDF5DatasetGenerator(config.VAL_HDF5, config.BATCH_SIZE,
 	aug=valAug, preprocessors=[iap], classes=config.NUM_CLASSES)
 
+# Enable eager execution
+tf.config.run_functions_eagerly(True)
+
 # if there is no specific model checkpoint supplied, then initialize
 # the network and compile the model
 if args["model"] is None:
@@ -51,20 +56,30 @@ if args["model"] is None:
 	model = EmotionVGGNet.build(width=48, height=48, depth=1,
 		classes=config.NUM_CLASSES)
 	opt = Adam(learning_rate=1e-3)
+	# opt = SGD(learning_rate=1e-2, momentum=0.9)
+
 	model.compile(loss="categorical_crossentropy", optimizer=opt,
 		metrics=["accuracy"])
 
 # otherwise, load the checkpoint from disk
 else:
 	print("[INFO] loading {}...".format(args["model"]))
+    
 	model = load_model(args["model"])
 
-	# update the learning rate
-	print("[INFO] old learning rate: {}".format(
-		K.get_value(model.optimizer.lr)))
-	K.set_value(model.optimizer.lr, 1e-5)
+    # update the learning rate using tf.keras API
+    
+	current_lr = model.optimizer.learning_rate.numpy()
+	print("[INFO] old learning rate: {}".format(current_lr))
+    # Set new learning rate
+
+    # 更换成Adam优化器
+	model.compile(loss="categorical_crossentropy", optimizer=Adam(learning_rate=1e-4),
+		metrics=["accuracy"])
+	# model.optimizer.learning_rate.assign(1e-4)
+    
 	print("[INFO] new learning rate: {}".format(
-		K.get_value(model.optimizer.lr)))
+        model.optimizer.learning_rate.numpy()))
 
 # construct the set of callbacks
 figPath = os.path.sep.join([config.OUTPUT_PATH,
@@ -76,17 +91,17 @@ callbacks = [
 		startAt=args["start_epoch"]),
 	TrainingMonitor(figPath, jsonPath=jsonPath,
 		startAt=args["start_epoch"])]
-
-# train the network
-model.fit(
-	trainGen.generator(),
-	steps_per_epoch=trainGen.numImages // config.BATCH_SIZE,
-	validation_data=valGen.generator(),
-	validation_steps=valGen.numImages // config.BATCH_SIZE,
-	epochs=15,
-	callbacks=callbacks, 
-	verbose=1)
-
-# close the databases
-trainGen.close()
-valGen.close()
+try:
+	# train the network
+	model.fit(
+		trainGen.generator(),
+		steps_per_epoch=trainGen.numImages // config.BATCH_SIZE,
+		validation_data=valGen.generator(),
+		validation_steps=valGen.numImages // config.BATCH_SIZE,
+		epochs=20,
+		callbacks=callbacks, 
+		verbose=1)
+finally:
+	# close the databases
+	trainGen.close()
+	valGen.close()

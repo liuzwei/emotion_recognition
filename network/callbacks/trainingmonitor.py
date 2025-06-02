@@ -1,18 +1,15 @@
 # import the necessary packages
-from tensorflow.keras.callbacks import CSVLogger
+from tensorflow.keras.callbacks import Callback
 import matplotlib.pyplot as plt
 import numpy as np
 import json
 import os
 
-class TrainingMonitor(CSVLogger):
-	def __init__(self, figPath, jsonPath=None, startAt=0, csvPath=None):
+class TrainingMonitor(Callback):
+	def __init__(self, figPath, jsonPath=None, startAt=0):
 		# store the output path for the figure, the path to the JSON
 		# serialized file, and the starting epoch
-		if csvPath is None:
-			csvPath = os.path.splitext(figPath)[0] + ".csv"
-	
-		super(TrainingMonitor, self).__init__(csvPath)
+		super(TrainingMonitor, self).__init__()
 		self.figPath = figPath
 		self.jsonPath = jsonPath
 		self.startAt = startAt
